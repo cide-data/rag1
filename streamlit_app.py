@@ -1,56 +1,117 @@
 import streamlit as st
-from openai import OpenAI
+import os
+from langchain.output_parsers import StrOutputParser
+#from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_community.document_loaders import PyMuPDFLoader
+from langchain_community.llms import Ollama
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain.text_splitter import CharacterTextSplitter
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
-)
+class RAGApp:
+    def __init__(self):
+        if 'chain' not in st.session_state:
+            st.session_state.chain = None
+        if 'pdf_loaded' not in st.session_state:
+            st.session_state.pdf_loaded = False
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+    def ensure_directory_exists(self, path):
+        if not os.path.exists(path):
+            os.makedirs(path)
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+    def load_pdf(self, pdf_path):
+        try:
+            loader = PyMuPDFLoader(pdf_path)
+            docs = loader.load()
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+            if not docs:
+                st.error("No documents found in the PDF.")
+                return None
 
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            text_splitter = CharacterTextSplitter(
+                separator="\n",
+                chunk_size=2000,
+                chunk_overlap=200
+            )
+            texts = text_splitter.split_documents(docs)
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
+            embeddings = HuggingFaceEmbeddings()
 
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+            index_directory = "vector_store"
+            index_path = os.path.join(index_directory, "faiss_index")
+            self.ensure_directory_exists(index_directory)
 
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
+            if os.path.exists(index_path):
+                st.info(f"Loading FAISS index from {index_path}...")
+                db = FAISS.load_local(index_path, embeddings)
+            else:
+                st.info("Creating new FAISS index...")
+                db = FAISS.from_documents(texts, embeddings)
+                db.save_local(index_path)
 
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+            retriever = db.as_retriever()
+            
+            # Define prompt template
+            template = """Answer the question based only on the following context:
+            {context}
+            
+            Question: {question}
+            
+            Answer: """
+            
+            prompt = ChatPromptTemplate.from_template(template)
+            
+            # Initialize model
+            llm = Ollama(model="llama2")
+            
+            # Create chain
+            chain = (
+                {"context": retriever, "question": RunnablePassthrough()}
+                | prompt
+                | llm
+                | StrOutputParser()
+            )
+
+            return chain
+
+        except Exception as e:
+            st.error(f"Error processing PDF: {e}")
+            return None
+
+    def run(self):
+        st.title("📄 RAG PDF Chatbot")
+
+        st.sidebar.header("📂 PDF Upload")
+        uploaded_file = st.sidebar.file_uploader("Choose a PDF file", type="pdf")
+
+        if uploaded_file is not None:
+            with open("temp_uploaded.pdf", "wb") as f:
+                f.write(uploaded_file.getbuffer())
+
+            st.session_state.chain = self.load_pdf("temp_uploaded.pdf")
+
+            if st.session_state.chain:
+                st.sidebar.success("PDF successfully loaded and processed!")
+                st.session_state.pdf_loaded = True
+
+        st.header("💬 Ask Questions about Your PDF")
+
+        if not st.session_state.pdf_loaded:
+            st.warning("Please upload a PDF first.")
+        else:
+            user_question = st.text_input("Enter your question:")
+
+            if user_question and st.session_state.chain:
+                with st.spinner("Generating response..."):
+                    try:
+                        result = st.session_state.chain.invoke(user_question)
+                        st.success("Answer:")
+                        st.write(result)
+                    except Exception as e:
+                        st.error(f"Error generating response: {e}")
+
+if __name__ == "__main__":
+    app = RAGApp()
+    app.run()
