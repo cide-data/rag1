@@ -10,8 +10,25 @@ from langchain_community.llms import Ollama
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
+from groq import Groq
 
 class CloudRAGApp:
+        
+    client = Groq(
+        api_key=os.environ.get("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"),
+    )
+    
+    chat_completion = client.chat.completions.create(
+        messages=[
+            {
+                "role": "user",
+                "content": "Explain the importance of fast language models",
+            }
+        ],
+        model="llama-3.3-70b-versatile",
+    )
+    
+    print(chat_completion.choices[0].message.content)
     def __init__(self):
         """Initialize the application state"""
         if 'chain' not in st.session_state:
