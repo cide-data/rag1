@@ -1,25 +1,6 @@
-streamlit>=1.31.0
-openai>=1.12.0
-langchain-core>=0.1.22
-langchain-community>=0.0.20
-langchain>=0.1.9
-
-# Document processing
-PyMuPDF>=1.23.8
-python-magic>=0.4.27
-python-magic-bin>=0.4.14
-
-# Vector store
-faiss-cpu>=1.7.4
-
-# Embeddings
-sentence-transformers>=2.5.1
-transformers>=4.37.2
-torch>=2.2.0
-
-# Additional utilities
-typing-extensions>=4.9.0
-pydantic>=2.6.1
-
-# Local LLM
-ollama>=0.1.6
+streamlit 
+langchain-core 
+langchain-community 
+pymupdf 
+faiss-cpu 
+sentence-transformers
