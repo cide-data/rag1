@@ -1,2 +1,28 @@
 streamlit
 openai
+
+langchain-core
+langchain-community
+langchain
+
+# Document processing
+PyMuPDF
+python-magic
+python-magic-bin
+sys_platform 
+
+# Vector store
+faiss-cpu
+
+
+# Embeddings
+sentence-transformers
+transformers
+torch
+
+# Additional utilities
+typing-extensions
+pydantic
+
+# Local LLM
+ollama
