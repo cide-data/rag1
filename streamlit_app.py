@@ -5,8 +5,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_community.document_loaders import PyMuPDFLoader
-from langchain_openai import ChatOpenAI
-# from langchain_community.llms import Ollama
+#from langchain_openai import ChatOpenAI
+from langchain_community.llms import Ollama
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
@@ -74,16 +74,16 @@ class CloudRAGApp:
             prompt = ChatPromptTemplate.from_template(template)
             
             # Initialize model with specific parameters
-            # llm = Ollama(
-            #     model="llama2",
-            #     temperature=0.7,
-            #     timeout=120  # Increased timeout for cloud environment
-            # )
-            llm = ChatOpenAI(
-                api_key=os.getenv("OPENAI_API_KEY"),
-                model_name="gpt-3.5-turbo",
-                temperature=0.7
-                )
+            llm = Ollama(
+                model="llama2",
+                temperature=0.7,
+                timeout=120  # Increased timeout for cloud environment
+            )
+            # llm = ChatOpenAI(
+            #     api_key=os.getenv("OPENAI_API_KEY"),
+            #     model_name="gpt-3.5-turbo",
+            #     temperature=0.7
+            #     )
             # Create chain with error handling
             chain = (
                 {"context": retriever, "question": RunnablePassthrough()}
