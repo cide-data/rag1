@@ -1,7 +1,7 @@
 import streamlit as st
 import os
-from langchain.output_parsers import StrOutputParser
-#from langchain_core.output_parsers import StrOutputParser
+#from langchain.output_parsers import StrOutputParser
+from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_community.document_loaders import PyMuPDFLoader
