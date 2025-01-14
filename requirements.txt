@@ -5,3 +5,4 @@ pymupdf
 faiss-cpu 
 sentence-transformers
 ollama
+groq
