@@ -75,27 +75,13 @@ class CloudRAGApp:
             prompt = ChatPromptTemplate.from_template(template)
             
             # Initialize model with specific parameters
-               client = Groq(
-                        api_key=os.environ.get("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"),
-                    )
-                    
-                    chat_completion = client.chat.completions.create(
-                        messages=[
-                            {
-                                "role": "user",
-                                "content": "Explain the importance of fast language models",
-                            }
-                        ],
-                        model="llama-3.3-70b-versatile",
-                    )
-                    
-                    print(chat_completion.choices[0].message.content)
+           
      
-            # llm = Ollama(
-            #     model="llama2",
-            #     temperature=0.7,
-            #     timeout=120  # Increased timeout for cloud environment
-            # )
+            llm = Ollama(
+                model="llama2",
+                temperature=0.7,
+                timeout=120  # Increased timeout for cloud environment
+            )
             # llm = ChatOpenAI(
             #     api_key=os.getenv("OPENAI_API_KEY"),
             #     model_name="gpt-3.5-turbo",
