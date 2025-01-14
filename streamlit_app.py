@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-#from langchain.output_parsers import StrOutputParser
+import tempfile
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
@@ -10,54 +10,61 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
 
-class RAGApp:
+class CloudRAGApp:
     def __init__(self):
+        """Initialize the application state"""
         if 'chain' not in st.session_state:
             st.session_state.chain = None
         if 'pdf_loaded' not in st.session_state:
             st.session_state.pdf_loaded = False
+        
+        # Initialize the embeddings model once
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
+        
+        # Use temporary directory for vector store
+        self.temp_dir = tempfile.mkdtemp()
+        self.index_directory = os.path.join(self.temp_dir, "vector_store")
 
-    def ensure_directory_exists(self, path):
-        if not os.path.exists(path):
-            os.makedirs(path)
-
-    def load_pdf(self, pdf_path):
+    def load_pdf(self, pdf_content):
+        """Load and process PDF content"""
         try:
-            loader = PyMuPDFLoader(pdf_path)
-            docs = loader.load()
-        except ImportError:
-            st.error("Error: PyMuPDF no está instalado correctamente")
-            return None
-        except FileNotFoundError:
-            st.error(f"Error: No se encontró el archivo {pdf_path}")
-            return None
+            # Save uploaded content to temporary file
+            temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+            temp_pdf.write(pdf_content)
+            temp_pdf.close()
 
+            # Process PDF
+            loader = PyMuPDFLoader(temp_pdf.name)
+            docs = loader.load()
+            
+            if not docs:
+                st.error("No documents found in the PDF.")
+                return None
+
+            # Split text into chunks
             text_splitter = CharacterTextSplitter(
                 separator="\n",
-                chunk_size=2000,
-                chunk_overlap=200
+                chunk_size=1000,  # Reduced chunk size for better cloud performance
+                chunk_overlap=100
             )
             texts = text_splitter.split_documents(docs)
 
-            embeddings = HuggingFaceEmbeddings()
-
-            index_directory = "vector_store"
-            index_path = os.path.join(index_directory, "faiss_index")
-            self.ensure_directory_exists(index_directory)
-
-            if os.path.exists(index_path):
-                st.info(f"Loading FAISS index from {index_path}...")
-                db = FAISS.load_local(index_path, embeddings)
-            else:
-                st.info("Creating new FAISS index...")
-                db = FAISS.from_documents(texts, embeddings)
-                db.save_local(index_path)
-
-            retriever = db.as_retriever()
+            # Create vector store
+            db = FAISS.from_documents(texts, self.embeddings)
             
-            # Define prompt template
-            template = """Answer the question based only on the following context:
-            {context}
+            # Create retriever with search parameters
+            retriever = db.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": 3}
+            )
+            
+            # Define prompt template with improved context handling
+            template = """Use the following pieces of context to answer the question. 
+            If you cannot find the answer in the context, say "I cannot find the answer in the provided document."
+            
+            Context: {context}
             
             Question: {question}
             
@@ -65,15 +72,14 @@ class RAGApp:
             
             prompt = ChatPromptTemplate.from_template(template)
             
-            # Initialize model
-            try:
-                llm = Ollama(model="llama2")
-                # Prueba simple para verificar la conexión
-                _ = llm.invoke("test")
-            except Exception as e:
-                st.error(f"Error conectando con Ollama: {e}")
-                return None
-            # Create chain
+            # Initialize model with specific parameters
+            llm = Ollama(
+                model="llama2",
+                temperature=0.7,
+                timeout=120  # Increased timeout for cloud environment
+            )
+            
+            # Create chain with error handling
             chain = (
                 {"context": retriever, "question": RunnablePassthrough()}
                 | prompt
@@ -81,44 +87,75 @@ class RAGApp:
                 | StrOutputParser()
             )
 
+            # Cleanup temporary file
+            os.unlink(temp_pdf.name)
+            
             return chain
 
         except Exception as e:
-            st.error(f"Error processing PDF: {e}")
+            st.error(f"Error processing PDF: {str(e)}")
             return None
 
     def run(self):
+        """Run the Streamlit application"""
+        st.set_page_config(
+            page_title="RAG PDF Chatbot",
+            page_icon="📄",
+            layout="wide"
+        )
+
         st.title("📄 RAG PDF Chatbot")
+        
+        # Sidebar for PDF upload
+        with st.sidebar:
+            st.header("📂 PDF Upload")
+            uploaded_file = st.file_uploader(
+                "Choose a PDF file",
+                type="pdf",
+                help="Upload a PDF document to chat with"
+            )
 
-        st.sidebar.header("📂 PDF Upload")
-        uploaded_file = st.sidebar.file_uploader("Choose a PDF file", type="pdf")
+            if uploaded_file:
+                with st.spinner("Processing PDF..."):
+                    pdf_content = uploaded_file.getvalue()
+                    st.session_state.chain = self.load_pdf(pdf_content)
+                    if st.session_state.chain:
+                        st.success("PDF processed successfully!")
+                        st.session_state.pdf_loaded = True
+                    
+            # Add system information
+            st.sidebar.markdown("---")
+            st.sidebar.info("""
+            💡 **Tips:**
+            - Upload a PDF file to start
+            - Ask specific questions
+            - Questions are answered based on PDF content only
+            """)
 
-        if uploaded_file is not None:
-            with open("temp_uploaded.pdf", "wb") as f:
-                f.write(uploaded_file.getbuffer())
-
-            st.session_state.chain = self.load_pdf("temp_uploaded.pdf")
-
-            if st.session_state.chain:
-                st.sidebar.success("PDF successfully loaded and processed!")
-                st.session_state.pdf_loaded = True
-
-        st.header("💬 Ask Questions about Your PDF")
-
+        # Main chat interface
+        st.header("💬 Chat with Your PDF")
+        
         if not st.session_state.pdf_loaded:
-            st.warning("Please upload a PDF first.")
+            st.info("👆 Please upload a PDF file to start chatting.")
         else:
-            user_question = st.text_input("Enter your question:")
+            # Chat interface
+            user_question = st.text_input(
+                "Ask a question about your PDF:",
+                placeholder="Enter your question here..."
+            )
 
-            if user_question and st.session_state.chain:
-                with st.spinner("Generating response..."):
-                    try:
-                        result = st.session_state.chain.invoke(user_question)
-                        st.success("Answer:")
-                        st.write(result)
-                    except Exception as e:
-                        st.error(f"Error generating response: {e}")
+            if user_question:
+                if st.session_state.chain:
+                    with st.spinner("Generating response..."):
+                        try:
+                            result = st.session_state.chain.invoke(user_question)
+                            st.write("🤖 Answer:")
+                            st.markdown(result)
+                        except Exception as e:
+                            st.error(f"Error generating response: {str(e)}")
+                            st.info("Please try rephrasing your question or uploading the PDF again.")
 
 if __name__ == "__main__":
-    app = RAGApp()
+    app = CloudRAGApp()
     app.run()
+ 
