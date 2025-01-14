@@ -77,9 +77,9 @@ class CloudRAGApp:
             # Initialize model with specific parameters
             llm = Groq(
                      api_key=os.environ.get("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"),
-                 )
+            )
                  
-                 chat_completion = client.chat.completions.create(
+            chat_completion = client.chat.completions.create(
                      messages=[
                          {
                              "role": "user",
@@ -87,7 +87,7 @@ class CloudRAGApp:
                          }
                      ],
                      model="llama-3.3-70b-versatile",
-                 )
+            )
                  
                  print(chat_completion.choices[0].message.content)
      
