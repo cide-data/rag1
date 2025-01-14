@@ -73,7 +73,7 @@ class CloudRAGApp:
             prompt = ChatPromptTemplate.from_template(template)
             
             # Initialize Groq model properly using ChatGroq
-            api_key = os.getenv("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")
+            api_key = os.getenv(GROQ_API_KEY)
             if not api_key:
                 st.error("GROQ_API_KEY environment variable is not set")
                 return None
