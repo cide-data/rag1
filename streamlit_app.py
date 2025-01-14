@@ -89,7 +89,7 @@ class CloudRAGApp:
                      model="llama-3.3-70b-versatile",
             )
                  
-                 print(chat_completion.choices[0].message.content)
+            print(chat_completion.choices[0].message.content)
      
             # llm = Ollama(
             #     model="llama2",
