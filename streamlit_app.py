@@ -25,10 +25,12 @@ class RAGApp:
         try:
             loader = PyMuPDFLoader(pdf_path)
             docs = loader.load()
-
-            if not docs:
-                st.error("No documents found in the PDF.")
-                return None
+        except ImportError:
+            st.error("Error: PyMuPDF no está instalado correctamente")
+            return None
+        except FileNotFoundError:
+            st.error(f"Error: No se encontró el archivo {pdf_path}")
+            return None
 
             text_splitter = CharacterTextSplitter(
                 separator="\n",
@@ -64,8 +66,13 @@ class RAGApp:
             prompt = ChatPromptTemplate.from_template(template)
             
             # Initialize model
-            llm = Ollama(model="llama2")
-            
+            try:
+                llm = Ollama(model="llama2")
+                # Prueba simple para verificar la conexión
+                _ = llm.invoke("test")
+            except Exception as e:
+                st.error(f"Error conectando con Ollama: {e}")
+                return None
             # Create chain
             chain = (
                 {"context": retriever, "question": RunnablePassthrough()}
